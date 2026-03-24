@@ -1,0 +1,18 @@
+version: 2
+
+sources:
+  - name: bronze
+    database: FOOD_SHARING_MAP
+    schema: BRONZE
+    tables:
+      - name: raw_initiatives
+        description: "Raw JSON data from ShareCity200 Food Sharing Map REST API"
+        columns:
+          - name: id
+            description: "Initiative unique identifier"
+          - name: raw_json
+            description: "Full JSON record as VARIANT"
+          - name: ingested_at
+            description: "Timestamp of data ingestion"
+          - name: source_api
+            description: "Source API identifier"

@@ -1,0 +1,16 @@
+# profiles.yml — typically placed in ~/.dbt/profiles.yml
+# Included here for reference and reproducibility
+
+food_sharing_map:
+  target: prod
+  outputs:
+    prod:
+      type: snowflake
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
+      user: "{{ env_var('SNOWFLAKE_USER') }}"
+      password: "{{ env_var('SNOWFLAKE_PASSWORD') }}"
+      role: SYSADMIN
+      database: FOOD_SHARING_MAP
+      warehouse: FOOD_SHARING_ETL_WH
+      schema: BRONZE
+      threads: 4

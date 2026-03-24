@@ -1,0 +1,10 @@
+# Copy this file to terraform.tfvars and fill in your values
+# DO NOT commit terraform.tfvars to version control
+
+aws_region    = "eu-central-1"
+project_name  = "food-sharing-map"
+environment   = "prod"
+
+snowflake_account  = "your_account_identifier"
+snowflake_username = "your_username"
+snowflake_role     = "ACCOUNTADMIN"
