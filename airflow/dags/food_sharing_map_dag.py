@@ -61,7 +61,13 @@ with DAG(
         logger.info("Fetching data from %s", API_URL)
         response = requests.get(API_URL, timeout=60)
         response.raise_for_status()
-        data = response.json()
+        payload = response.json()
+
+        # API returns {"success": ..., "data": [...]}
+        if isinstance(payload, dict) and "data" in payload:
+            data = payload["data"]
+        else:
+            data = payload
 
         if not isinstance(data, list):
             raise ValueError(
