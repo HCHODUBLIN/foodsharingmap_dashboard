@@ -21,27 +21,3 @@ models:
         description: "Geographic longitude"
       - name: latitude
         description: "Geographic latitude"
-
-  - name: stg_initiatives_activities
-    description: "Flattened food sharing activities — one row per initiative per activity"
-    columns:
-      - name: initiative_id
-        description: "Initiative identifier"
-        tests:
-          - not_null
-      - name: activity_type
-        description: "Type of food sharing activity (e.g., Distribution, Growing, Cooking & Eating)"
-        tests:
-          - not_null
-
-  - name: stg_initiatives_sharing_methods
-    description: "Flattened sharing methods — one row per initiative per method"
-    columns:
-      - name: initiative_id
-        description: "Initiative identifier"
-        tests:
-          - not_null
-      - name: sharing_method
-        description: "How food is shared (e.g., Gifting, Selling, Bartering)"
-        tests:
-          - not_null

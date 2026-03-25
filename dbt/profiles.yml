@@ -9,7 +9,7 @@ food_sharing_map:
       account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
       user: "{{ env_var('SNOWFLAKE_USER') }}"
       password: "{{ env_var('SNOWFLAKE_PASSWORD') }}"
-      role: SYSADMIN
+      role: FOOD_SHARING_ETL_ROLE
       database: FOOD_SHARING_MAP
       warehouse: FOOD_SHARING_ETL_WH
       schema: BRONZE

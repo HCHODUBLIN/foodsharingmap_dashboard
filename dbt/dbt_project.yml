@@ -16,6 +16,9 @@ clean-targets: ["target", "dbt_packages"]
 models:
   food_sharing_map:
     staging:
+      +schema: bronze
+      +materialized: view
+    intermediate:
       +schema: silver
       +materialized: table
     marts:

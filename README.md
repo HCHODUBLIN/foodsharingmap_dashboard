@@ -67,20 +67,24 @@ flowchart LR
 
 ---
 
-## Data Model (Medallion Architecture)
+## Data Model
 
-### Bronze Layer
-- `RAW_INITIATIVES` — Raw JSON records stored as Snowflake VARIANT type, exactly as received from the API.
+Uses dbt's **staging → intermediate → marts** convention, mapped to Snowflake's medallion schemas:
 
-### Silver Layer
-- `stg_initiatives` — Cleaned, typed initiative records with extracted fields (name, country, city, coordinates, URLs).
-- `stg_initiatives_activities` — Flattened `foodSharingActivities` array → one row per initiative per activity type.
-- `stg_initiatives_sharing_methods` — Flattened `howItIsShared` array → one row per initiative per sharing method.
+### Staging → BRONZE (views)
+- `stg_initiatives` — Extracts fields from raw JSON, casts types, filters to latest snapshot.
 
-### Gold Layer
+### Intermediate → SILVER (tables)
+- `int_initiatives_activities` — Flattened `foodSharingActivities` array → one row per initiative per activity type.
+- `int_initiatives_sharing_methods` — Flattened `howItIsShared` array → one row per initiative per sharing method.
+
+### Marts → GOLD (tables)
 - `fct_activity_distribution` — Activity type counts, percentages, geographic spread.
 - `fct_geo_distribution` — Country/city level initiative counts with coordinates.
 - `fct_country_summary` — Country-level aggregates with centroids for map visualization.
+
+### Source (Airflow-managed)
+- `BRONZE.RAW_INITIATIVES` — Raw JSON records as Snowflake VARIANT, appended with `ingested_at` timestamp for history.
 
 ---
 
@@ -126,6 +130,50 @@ This matches the data update cadence of the CULTIVATE API — the underlying res
 
 ---
 
+## Tests
+
+### Airflow DAG tests
+
+```bash
+cd airflow
+python -m pytest tests/ -v
+```
+
+| Test | What it checks |
+|---|---|
+| `test_file_imports` | DAG files load without import errors |
+| `test_dag_has_tags` | Every DAG has at least one tag |
+| `test_dag_has_description` | Every DAG has a description |
+| `test_dag_has_retries` | Every task has retries configured |
+| `test_extract_*` | API response parsing (dict wrapper, plain list, error handling) |
+| `test_row_*` | Snowflake row preparation (with/without id, multiple rows) |
+
+### dbt tests
+
+```bash
+cd dbt
+dbt test
+```
+
+| Model | Tests |
+|---|---|
+| `stg_initiatives` | `initiative_id` unique + not_null, `initiative_name` not_null |
+| `int_initiatives_activities` | `initiative_id` not_null, `activity_type` not_null |
+| `int_initiatives_sharing_methods` | `initiative_id` not_null, `sharing_method` not_null |
+| `fct_activity_distribution` | `activity_type` unique + not_null |
+| `fct_geo_distribution` | `country` not_null |
+| `fct_country_summary` | `country` unique + not_null |
+
+### Terraform validation
+
+```bash
+cd terraform
+terraform validate
+terraform plan
+```
+
+---
+
 ## How to Reproduce
 
 ### Prerequisites
@@ -164,7 +212,7 @@ docker compose up -d
 #   Conn Type: Snowflake
 #   Login: <your_user>
 #   Password: <your_password>
-#   Extra: {"account": "<your_account>", "warehouse": "FOOD_SHARING_ETL_WH", "database": "FOOD_SHARING_MAP", "role": "SYSADMIN"}
+#   Extra: {"account": "<your_account>", "warehouse": "FOOD_SHARING_ETL_WH", "database": "FOOD_SHARING_MAP", "role": "FOOD_SHARING_ETL_ROLE"}
 ```
 
 ### Step 4: Configure and run dbt
@@ -216,34 +264,40 @@ The dashboard works in **two modes**:
 ```
 food-sharing-map/
 ├── airflow/
-│   └── dags/
-│       └── food_sharing_map_dag.py    # Airflow DAG: API → S3 + Snowflake → dbt
+│   ├── dags/
+│   │   └── food_sharing_map_dag.py    # Pipeline DAG: API → S3 → Snowflake → dbt
+│   ├── tests/                         # DAG validation + unit tests
+│   ├── Dockerfile                     # Airflow 2.8.1 + Python 3.11
+│   └── docker-compose.yaml            # Local Airflow setup
 ├── terraform/
-│   ├── main.tf                        # AWS S3, Snowflake resources
+│   ├── main.tf                        # AWS: S3, IAM, EC2, Lambda, EventBridge
+│   ├── snowflake.tf                   # Snowflake: DB, schemas, warehouses, roles
 │   ├── variables.tf                   # Input variables
 │   ├── providers.tf                   # AWS + Snowflake providers
-│   └── outputs.tf                     # Resource outputs
+│   ├── outputs.tf                     # Resource outputs
+│   └── lambda/                        # Lambda function for EC2 start
 ├── dbt/
 │   ├── dbt_project.yml                # dbt configuration
-│   ├── profiles.yml                   # Connection profiles (reference)
+│   ├── profiles.yml                   # Connection profiles
+│   ├── macros/                        # Custom schema macro
 │   └── models/
-│       ├── bronze/                    # Raw data views
-│       │   ├── src_raw_initiatives.sql
-│       │   └── sources.yml
-│       ├── silver/                    # Cleaned & flattened
-│       │   ├── stg_initiatives.sql
-│       │   ├── stg_initiatives_activities.sql
-│       │   ├── stg_initiatives_sharing_methods.sql
-│       │   └── schema.yml
-│       └── gold/                      # Aggregated for dashboard
+│       ├── staging/                   # Source data extraction (→ BRONZE)
+│       │   └── stg_initiatives.sql
+│       ├── intermediate/              # Flatten & transform (→ SILVER)
+│       │   ├── int_initiatives_activities.sql
+│       │   └── int_initiatives_sharing_methods.sql
+│       └── marts/                     # Aggregated for dashboard (→ GOLD)
 │           ├── fct_activity_distribution.sql
 │           ├── fct_geo_distribution.sql
-│           ├── fct_country_summary.sql
-│           └── schema.yml
+│           └── fct_country_summary.sql
+├── .github/
+│   └── workflows/
+│       └── terraform.yml              # CI/CD for Terraform
 ├── dashboard/
 │   ├── app.py                         # Streamlit dashboard
 │   └── requirements.txt
 ├── requirements.txt                   # Root dependencies
+├── CLAUDE.md                          # Project instructions
 ├── .gitignore
 └── README.md
 ```

@@ -12,7 +12,7 @@ SELECT
     ARRAY_AGG(DISTINCT activity_type) AS activity_types,
     AVG(longitude)                AS centroid_lng,
     AVG(latitude)                 AS centroid_lat
-FROM {{ ref('stg_initiatives_activities') }}
+FROM {{ ref('int_initiatives_activities') }}
 WHERE country IS NOT NULL
 GROUP BY country
 ORDER BY total_initiatives DESC

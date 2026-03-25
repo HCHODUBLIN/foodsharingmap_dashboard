@@ -14,7 +14,7 @@ SELECT
     AVG(latitude)                 AS avg_latitude,
     ARRAY_AGG(DISTINCT activity_type) AS activity_types,
     COUNT(DISTINCT activity_type) AS activity_type_count
-FROM {{ ref('stg_initiatives_activities') }}
+FROM {{ ref('int_initiatives_activities') }}
 WHERE country IS NOT NULL
 GROUP BY country, city
 ORDER BY initiative_count DESC

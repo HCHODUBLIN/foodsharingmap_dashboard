@@ -89,7 +89,7 @@ resource "snowflake_grant_account_role" "sysadmin_to_accountadmin" {
 }
 
 # =============================================================================
-# ETL Role grants — BRONZE read/write, ETL warehouse
+# ETL Role grants — BRONZE/SILVER/GOLD access, ETL warehouse
 # =============================================================================
 
 resource "snowflake_grant_privileges_to_account_role" "etl_bronze_usage" {
@@ -107,6 +107,96 @@ resource "snowflake_grant_privileges_to_account_role" "etl_bronze_tables" {
     future {
       object_type_plural = "TABLES"
       in_schema          = "\"${snowflake_database.food_sharing.name}\".\"${snowflake_schema.bronze.name}\""
+    }
+  }
+}
+
+resource "snowflake_grant_privileges_to_account_role" "etl_bronze_all_tables" {
+  account_role_name = snowflake_account_role.etl_role.name
+  privileges        = ["SELECT", "INSERT", "UPDATE", "DELETE"]
+  on_schema_object {
+    all {
+      object_type_plural = "TABLES"
+      in_schema          = "\"${snowflake_database.food_sharing.name}\".\"${snowflake_schema.bronze.name}\""
+    }
+  }
+}
+
+resource "snowflake_grant_privileges_to_account_role" "etl_bronze_create_table" {
+  account_role_name = snowflake_account_role.etl_role.name
+  privileges        = ["CREATE TABLE"]
+  on_schema {
+    schema_name = "\"${snowflake_database.food_sharing.name}\".\"${snowflake_schema.bronze.name}\""
+  }
+}
+
+# ETL Role — BRONZE create view (dbt staging views)
+resource "snowflake_grant_privileges_to_account_role" "etl_bronze_create_view" {
+  account_role_name = snowflake_account_role.etl_role.name
+  privileges        = ["CREATE VIEW"]
+  on_schema {
+    schema_name = "\"${snowflake_database.food_sharing.name}\".\"${snowflake_schema.bronze.name}\""
+  }
+}
+
+# ETL Role — SILVER usage + create table (dbt intermediate)
+resource "snowflake_grant_privileges_to_account_role" "etl_silver_usage" {
+  account_role_name = snowflake_account_role.etl_role.name
+  privileges        = ["USAGE", "CREATE TABLE"]
+  on_schema {
+    schema_name = "\"${snowflake_database.food_sharing.name}\".\"${snowflake_schema.silver.name}\""
+  }
+}
+
+resource "snowflake_grant_privileges_to_account_role" "etl_silver_all_tables" {
+  account_role_name = snowflake_account_role.etl_role.name
+  privileges        = ["SELECT", "INSERT", "UPDATE", "DELETE"]
+  on_schema_object {
+    all {
+      object_type_plural = "TABLES"
+      in_schema          = "\"${snowflake_database.food_sharing.name}\".\"${snowflake_schema.silver.name}\""
+    }
+  }
+}
+
+resource "snowflake_grant_privileges_to_account_role" "etl_silver_future_tables" {
+  account_role_name = snowflake_account_role.etl_role.name
+  privileges        = ["SELECT", "INSERT", "UPDATE", "DELETE"]
+  on_schema_object {
+    future {
+      object_type_plural = "TABLES"
+      in_schema          = "\"${snowflake_database.food_sharing.name}\".\"${snowflake_schema.silver.name}\""
+    }
+  }
+}
+
+# ETL Role — GOLD usage + create table (dbt marts)
+resource "snowflake_grant_privileges_to_account_role" "etl_gold_usage" {
+  account_role_name = snowflake_account_role.etl_role.name
+  privileges        = ["USAGE", "CREATE TABLE"]
+  on_schema {
+    schema_name = "\"${snowflake_database.food_sharing.name}\".\"${snowflake_schema.gold.name}\""
+  }
+}
+
+resource "snowflake_grant_privileges_to_account_role" "etl_gold_all_tables" {
+  account_role_name = snowflake_account_role.etl_role.name
+  privileges        = ["SELECT", "INSERT", "UPDATE", "DELETE"]
+  on_schema_object {
+    all {
+      object_type_plural = "TABLES"
+      in_schema          = "\"${snowflake_database.food_sharing.name}\".\"${snowflake_schema.gold.name}\""
+    }
+  }
+}
+
+resource "snowflake_grant_privileges_to_account_role" "etl_gold_future_tables" {
+  account_role_name = snowflake_account_role.etl_role.name
+  privileges        = ["SELECT", "INSERT", "UPDATE", "DELETE"]
+  on_schema_object {
+    future {
+      object_type_plural = "TABLES"
+      in_schema          = "\"${snowflake_database.food_sharing.name}\".\"${snowflake_schema.gold.name}\""
     }
   }
 }

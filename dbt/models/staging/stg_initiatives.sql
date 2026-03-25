@@ -2,7 +2,7 @@
 -- Extracts fields from raw JSON and casts to appropriate types
 -- Filters to latest ingestion snapshot only
 
-{{ config(materialized='table') }}
+{{ config(materialized='view') }}
 
 SELECT
     raw_json:id::VARCHAR                    AS initiative_id,

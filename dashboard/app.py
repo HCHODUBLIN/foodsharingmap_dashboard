@@ -11,6 +11,9 @@ Supports two modes:
 
 import json
 
+from datetime import datetime
+
+import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -30,6 +33,17 @@ st.set_page_config(
 API_URL = "https://www.sharingsolutions.eu/wp-json/cultivate/v1/data"
 AIRFLOW_API_BASE = "http://localhost:8080/api/v1"  # Configurable
 
+# CULTIVATE brand palette (from brandbook v1.1)
+BROCCOGREEN = "#05A54B"
+CARROTORANGE = "#EB502D"
+CUCUMBER = "#8CC896"
+BANANA = "#FCD9A3"
+RADISH = "#C8146E"
+SOIL = "#3C140F"
+CULTIVATE_PALETTE = [
+    BROCCOGREEN, CARROTORANGE, CUCUMBER, BANANA, RADISH, SOIL,
+]
+
 
 # ---------------------------------------------------------------------------
 # Data loading
@@ -41,7 +55,14 @@ def load_data_from_api() -> pd.DataFrame:
     """Fetch data directly from the REST API (demo mode)."""
     response = requests.get(API_URL, timeout=60)
     response.raise_for_status()
-    data = response.json()
+    payload = response.json()
+
+    # API returns {"success": ..., "data": [...]}
+    if isinstance(payload, dict) and "data" in payload:
+        data = payload["data"]
+    else:
+        data = payload
+
     return pd.DataFrame(data)
 
 
@@ -58,24 +79,40 @@ def load_data_from_snowflake(query: str) -> pd.DataFrame:
         schema="GOLD",
     )
     try:
-        return pd.read_sql(query, conn)
+        df = pd.read_sql(query, conn)
+        df.columns = [c.lower() for c in df.columns]
+        return df
     finally:
         conn.close()
 
 
-def get_data() -> pd.DataFrame:
-    """Load data from Snowflake if configured, otherwise from API."""
-    try:
-        if "snowflake" in st.secrets:
-            df = load_data_from_snowflake(
-                "SELECT * FROM FOOD_SHARING_MAP.GOLD.FCT_GEO_DISTRIBUTION"
-            )
-            return df
-    except Exception:
-        pass
-
-    # Fallback: fetch from API directly
-    return load_data_from_api()
+@st.cache_data(ttl=3600)
+def load_snowflake_data() -> dict:
+    """Load all gold tables from Snowflake."""
+    activity_dist = load_data_from_snowflake(
+        "SELECT * FROM FOOD_SHARING_MAP.GOLD.FCT_ACTIVITY_DISTRIBUTION"
+    )
+    geo_dist = load_data_from_snowflake(
+        "SELECT * FROM FOOD_SHARING_MAP.GOLD.FCT_GEO_DISTRIBUTION"
+    )
+    country_summary = load_data_from_snowflake(
+        "SELECT * FROM FOOD_SHARING_MAP.GOLD.FCT_COUNTRY_SUMMARY"
+    )
+    sharing_methods = load_data_from_snowflake(
+        "SELECT * FROM FOOD_SHARING_MAP.SILVER.INT_INITIATIVES_SHARING_METHODS"
+    )
+    sharing_dist = (
+        sharing_methods.groupby("sharing_method")
+        .agg(initiative_count=("initiative_id", "nunique"))
+        .reset_index()
+        .sort_values("initiative_count", ascending=False)
+    )
+    return {
+        "activity_dist": activity_dist,
+        "geo_dist": geo_dist,
+        "country_summary": country_summary,
+        "sharing_dist": sharing_dist,
+    }
 
 
 def prepare_api_data(df: pd.DataFrame) -> dict:
@@ -181,7 +218,9 @@ def render_activity_tile(data: dict):
     """Tile 1: Food sharing activity type distribution."""
     st.subheader("📊 Food Sharing Activities by Type")
 
-    activity_dist = data["activity_dist"]
+    activity_dist = data["activity_dist"].sort_values(
+        "initiative_count", ascending=False,
+    )
 
     col1, col2 = st.columns([2, 1])
 
@@ -196,7 +235,7 @@ def render_activity_tile(data: dict):
                 "activity_type": "Activity Type",
                 "initiative_count": "Number of Initiatives",
             },
-            color_discrete_sequence=px.colors.qualitative.Set2,
+            color_discrete_sequence=CULTIVATE_PALETTE,
         )
         fig.update_layout(
             showlegend=False,
@@ -211,7 +250,7 @@ def render_activity_tile(data: dict):
             activity_dist,
             values="initiative_count",
             names="activity_type",
-            color_discrete_sequence=px.colors.qualitative.Set2,
+            color_discrete_sequence=CULTIVATE_PALETTE,
         )
         fig_pie.update_traces(textposition="inside", textinfo="percent+label")
         fig_pie.update_layout(height=450, showlegend=False)
@@ -220,29 +259,70 @@ def render_activity_tile(data: dict):
 
 def render_geo_tile(data: dict):
     """Tile 2: Geographic distribution."""
-    st.subheader("🗺️ Initiatives by Country & City")
+    st.subheader("🗺️ Geographic Distribution")
 
     country_summary = data["country_summary"]
+    geo_dist = data["geo_dist"]
 
-    # Top countries bar chart
-    top_n = st.slider("Show top N countries", 5, 30, 15)
-    top_countries = country_summary.head(top_n)
+    col_country, col_city = st.columns(2)
 
-    fig = px.bar(
-        top_countries,
-        x="country",
-        y="total_initiatives",
-        color="total_initiatives",
-        text="total_initiatives",
-        labels={
-            "country": "Country",
-            "total_initiatives": "Number of Initiatives",
-        },
-        color_continuous_scale="Greens",
-    )
-    fig.update_layout(xaxis_tickangle=-45, height=450, showlegend=False)
-    fig.update_traces(textposition="outside")
-    st.plotly_chart(fig, use_container_width=True)
+    with col_country:
+        st.markdown("**By Country**")
+        top_n_country = st.slider(
+            "Show top N countries", 5, 50, 15, key="top_country",
+        )
+        top_countries = country_summary.sort_values(
+            "total_initiatives", ascending=False,
+        ).head(top_n_country)
+
+        fig = px.bar(
+            top_countries,
+            x="country",
+            y="total_initiatives",
+            color="total_initiatives",
+            text="total_initiatives",
+            labels={
+                "country": "Country",
+                "total_initiatives": "Initiatives",
+            },
+            color_continuous_scale=[
+                [0, CUCUMBER], [0.5, BROCCOGREEN], [1, SOIL],
+            ],
+        )
+        fig.update_layout(
+            xaxis_tickangle=-45, height=500, showlegend=False,
+        )
+        fig.update_traces(textposition="outside")
+        st.plotly_chart(fig, use_container_width=True)
+
+    with col_city:
+        st.markdown("**By City**")
+        top_n_city = st.slider(
+            "Show top N cities", 5, 50, 20, key="top_city",
+        )
+        top_cities = geo_dist.sort_values(
+            "initiative_count", ascending=False,
+        ).head(top_n_city)
+
+        fig = px.bar(
+            top_cities,
+            x="city",
+            y="initiative_count",
+            color="initiative_count",
+            text="initiative_count",
+            labels={
+                "city": "City",
+                "initiative_count": "Initiatives",
+            },
+            color_continuous_scale=[
+                [0, BANANA], [0.5, CARROTORANGE], [1, RADISH],
+            ],
+        )
+        fig.update_layout(
+            xaxis_tickangle=-45, height=500, showlegend=False,
+        )
+        fig.update_traces(textposition="outside")
+        st.plotly_chart(fig, use_container_width=True)
 
     # Interactive map
     st.subheader("🌐 Initiative Locations")
@@ -282,63 +362,224 @@ def render_sharing_methods(data: dict):
             "sharing_method": "Sharing Method",
             "initiative_count": "Number of Initiatives",
         },
-        color_discrete_sequence=px.colors.qualitative.Pastel,
+        color_discrete_sequence=CULTIVATE_PALETTE,
     )
     fig.update_layout(showlegend=False, height=400)
     fig.update_traces(textposition="outside")
     st.plotly_chart(fig, use_container_width=True)
 
 
-def render_country_drilldown(data: dict):
-    """Country-level drill-down."""
-    st.subheader("🔍 Country Drill-Down")
+def render_city_drilldown(data: dict):
+    """City-level drill-down."""
+    st.subheader("🔍 City Drill-Down")
 
-    countries = sorted(data["raw"]["country"].dropna().unique())
-    selected = st.selectbox("Select a country", countries)
+    cities = sorted(data["raw"]["city"].dropna().unique())
+    selected = st.selectbox("Select a city", cities)
 
     if selected:
-        country_data = data["activities"][
-            data["activities"]["country"] == selected
+        city_data = data["activities"][
+            data["activities"]["city"] == selected
         ]
 
         col1, col2 = st.columns(2)
 
         with col1:
-            city_counts = (
-                country_data.groupby("city")
-                .agg(count=("id", "nunique"))
+            initiative_list = (
+                city_data.groupby("id")
+                .agg(
+                    name=("name", "first"),
+                    activities=("activity_type", lambda x: ", ".join(x.dropna())),
+                )
                 .reset_index()
-                .sort_values("count", ascending=False)
             )
-            fig = px.bar(
-                city_counts,
-                x="city",
-                y="count",
-                text="count",
-                labels={"city": "City", "count": "Initiatives"},
-                color_discrete_sequence=["#2ecc71"],
+            st.markdown(f"**{len(initiative_list)} initiatives in {selected}**")
+            st.dataframe(
+                initiative_list[["name", "activities"]].rename(
+                    columns={"name": "Initiative", "activities": "Activities"},
+                ),
+                use_container_width=True,
+                hide_index=True,
             )
-            fig.update_layout(
-                title=f"Cities in {selected}", height=400
-            )
-            st.plotly_chart(fig, use_container_width=True)
 
         with col2:
             act_counts = (
-                country_data.groupby("activity_type")
+                city_data.groupby("activity_type")
                 .agg(count=("id", "nunique"))
                 .reset_index()
+                .sort_values("count", ascending=False)
             )
             fig = px.pie(
                 act_counts,
                 values="count",
                 names="activity_type",
-                color_discrete_sequence=px.colors.qualitative.Set2,
+                color_discrete_sequence=CULTIVATE_PALETTE,
             )
             fig.update_layout(
-                title=f"Activities in {selected}", height=400
+                title=f"Activities in {selected}", height=400,
             )
             st.plotly_chart(fig, use_container_width=True)
+
+
+def render_data_quality(data: dict):
+    """Data quality checks — flag incorrect or unexpected values."""
+    st.subheader("🔎 Data Quality Check")
+
+    today = datetime.now().strftime("%Y-%m-%d")
+    st.info(
+        f"**Note for the Sharing Solutions admin:** "
+        f"This data is fetched directly from the "
+        f"[Food Sharing Map](https://www.sharingsolutions.eu/food-sharing-map/) "
+        f"on **{today}**. "
+        f"Please review the flagged issues below and adjust in the platform."
+    )
+
+    raw = data["raw"]
+
+    VALID_ACTIVITIES = {"Distribution", "Growing", "Cooking & Eating"}
+    VALID_SHARING = {"Gifting", "Selling", "Collecting", "Bartering"}
+
+    # Check activities
+    activity_issues = []
+    for _, row in raw.iterrows():
+        activities = row.get("foodSharingActivities", [])
+        if not isinstance(activities, list):
+            continue
+        for a in activities:
+            if a not in VALID_ACTIVITIES:
+                activity_issues.append({
+                    "Initiative ID": row.get("id", "N/A"),
+                    "Initiative Name": row.get("name", "N/A"),
+                    "Country": row.get("country", "N/A"),
+                    "Field": "foodSharingActivities",
+                    "Invalid Value": repr(a),
+                })
+
+    # Check sharing methods
+    sharing_issues = []
+    for _, row in raw.iterrows():
+        methods = row.get("howItIsShared", [])
+        if not isinstance(methods, list):
+            continue
+        for m in methods:
+            if m not in VALID_SHARING:
+                sharing_issues.append({
+                    "Initiative ID": row.get("id", "N/A"),
+                    "Initiative Name": row.get("name", "N/A"),
+                    "Country": row.get("country", "N/A"),
+                    "Field": "howItIsShared",
+                    "Invalid Value": repr(m),
+                })
+
+    all_issues = activity_issues + sharing_issues
+
+    st.markdown("### Tag Issues")
+    if all_issues:
+        st.warning(f"Found {len(all_issues)} tag issues")
+        st.dataframe(
+            pd.DataFrame(all_issues),
+            use_container_width=True,
+            hide_index=True,
+        )
+    else:
+        st.success("No tag issues found")
+
+    # Geographic outlier check
+    st.markdown("### Geographic Outliers")
+    st.markdown(
+        "Initiatives whose coordinates are far from the median "
+        "of their city (possible data entry errors)."
+    )
+
+    geo_df = raw.copy()
+    geo_df["lat"] = pd.to_numeric(geo_df["lat"], errors="coerce")
+    geo_df["lng"] = pd.to_numeric(geo_df["lng"], errors="coerce")
+    geo_df = geo_df.dropna(subset=["lat", "lng", "city"])
+
+    # Filter out (0,0) or invalid ranges
+    invalid_coords = geo_df[
+        (geo_df["lat"] == 0) & (geo_df["lng"] == 0)
+        | (geo_df["lat"].abs() > 90)
+        | (geo_df["lng"].abs() > 180)
+    ]
+
+    # Calculate distance from city median
+    city_medians = geo_df.groupby("city").agg(
+        median_lat=("lat", "median"),
+        median_lng=("lng", "median"),
+        city_count=("id", "count"),
+    ).reset_index()
+
+    geo_merged = geo_df.merge(city_medians, on="city")
+    # Only check cities with 2+ initiatives (need comparison)
+    geo_merged = geo_merged[geo_merged["city_count"] >= 2]
+
+    # Haversine-like distance in km (simplified)
+    geo_merged["dist_km"] = np.sqrt(
+        ((geo_merged["lat"] - geo_merged["median_lat"]) * 111) ** 2
+        + (
+            (geo_merged["lng"] - geo_merged["median_lng"])
+            * 111
+            * np.cos(np.radians(geo_merged["median_lat"]))
+        ) ** 2
+    )
+
+    threshold_km = st.slider(
+        "Distance threshold (km)", 10, 500, 100, key="geo_threshold",
+    )
+    outliers = geo_merged[geo_merged["dist_km"] > threshold_km]
+
+    if len(outliers) > 0 or len(invalid_coords) > 0:
+        geo_issues = []
+
+        for _, row in invalid_coords.iterrows():
+            geo_issues.append({
+                "Initiative ID": row.get("id", "N/A"),
+                "Initiative Name": row.get("name", "N/A"),
+                "City": row.get("city", "N/A"),
+                "Country": row.get("country", "N/A"),
+                "Lat": row["lat"],
+                "Lng": row["lng"],
+                "Issue": "Invalid coordinates (0,0 or out of range)",
+            })
+
+        for _, row in outliers.iterrows():
+            geo_issues.append({
+                "Initiative ID": row.get("id", "N/A"),
+                "Initiative Name": row.get("name", "N/A"),
+                "City": row["city"],
+                "Country": row.get("country", "N/A"),
+                "Lat": round(row["lat"], 4),
+                "Lng": round(row["lng"], 4),
+                "Issue": f"{row['dist_km']:.0f} km from city median",
+            })
+
+        st.warning(f"Found {len(geo_issues)} geographic issues")
+        st.dataframe(
+            pd.DataFrame(geo_issues),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+        # Map showing outliers in red
+        if len(outliers) > 0:
+            fig_map = px.scatter_mapbox(
+                outliers,
+                lat="lat",
+                lon="lng",
+                hover_name="name",
+                hover_data=["city", "country", "dist_km"],
+                color_discrete_sequence=[CARROTORANGE],
+                zoom=2,
+                height=400,
+            )
+            fig_map.update_layout(
+                mapbox_style="carto-positron",
+                margin={"r": 0, "t": 0, "l": 0, "b": 0},
+                showlegend=False,
+            )
+            st.plotly_chart(fig_map, use_container_width=True)
+    else:
+        st.success("No geographic outliers found")
 
 
 def render_manual_trigger():
@@ -397,36 +638,52 @@ def render_manual_trigger():
 def main():
     render_header()
 
-    with st.spinner("Loading data..."):
+    # Try Snowflake first, fallback to API
+    use_snowflake = False
+    try:
+        if "snowflake" in st.secrets:
+            with st.spinner("Loading data from Snowflake..."):
+                snowflake_data = load_snowflake_data()
+            use_snowflake = True
+    except Exception:
+        pass
+
+    # Always load API data for data quality + fallback
+    with st.spinner("Loading data from API..."):
         raw_df = load_data_from_api()
-        data = prepare_api_data(raw_df)
+        api_data = prepare_api_data(raw_df)
+
+    if use_snowflake:
+        # Use Snowflake GOLD data for dashboard charts
+        data = {
+            "activity_dist": snowflake_data["activity_dist"],
+            "geo_dist": snowflake_data["geo_dist"],
+            "country_summary": snowflake_data["country_summary"],
+            "sharing_dist": snowflake_data["sharing_dist"],
+            "raw": api_data["raw"],
+            "activities": api_data["activities"],
+        }
+    else:
+        data = api_data
 
     render_kpis(data)
 
-    st.divider()
+    tab_dashboard, tab_quality = st.tabs(["Dashboard", "Data Quality"])
 
-    # Tile 1: Activity distribution
-    render_activity_tile(data)
+    with tab_dashboard:
+        st.divider()
+        render_activity_tile(data)
+        st.divider()
+        render_geo_tile(data)
+        st.divider()
+        render_sharing_methods(data)
+        st.divider()
+        render_city_drilldown(data)
+        st.divider()
+        render_manual_trigger()
 
-    st.divider()
-
-    # Tile 2: Geographic distribution
-    render_geo_tile(data)
-
-    st.divider()
-
-    # Bonus: Sharing methods
-    render_sharing_methods(data)
-
-    st.divider()
-
-    # Drill-down
-    render_country_drilldown(data)
-
-    st.divider()
-
-    # Manual trigger
-    render_manual_trigger()
+    with tab_quality:
+        render_data_quality(api_data)
 
     # Footer
     st.divider()

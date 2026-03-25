@@ -132,17 +132,15 @@ with DAG(
                 """)
 
                 # Append records (preserves history)
-                rows = [
-                    (r.get("id"), json.dumps(r), ingestion_ts) for r in data
-                ]
-                cursor.executemany(
-                    """
-                    INSERT INTO FOOD_SHARING_MAP.BRONZE.RAW_INITIATIVES
-                        (id, raw_json, ingested_at)
-                    VALUES (%s, PARSE_JSON(%s), %s)
-                    """,
-                    rows,
-                )
+                for r in data:
+                    cursor.execute(
+                        """
+                        INSERT INTO FOOD_SHARING_MAP.BRONZE.RAW_INITIATIVES
+                            (id, raw_json, ingested_at)
+                        SELECT %s, PARSE_JSON(%s), %s
+                        """,
+                        (r.get("id"), json.dumps(r), ingestion_ts),
+                    )
 
             conn.commit()
             logger.info(
