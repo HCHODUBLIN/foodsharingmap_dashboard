@@ -1,0 +1,32 @@
+[0m14:41:14.725314 [debug] [MainThread]: Sending event: {'category': 'dbt', 'action': 'invocation', 'label': 'start', 'context': [<snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x71f6347e3650>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x71f6347c51f0>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x71f6347c6120>]}
+
+
+============================== 14:41:14.747281 | 6bf99652-eb8c-43a0-be67-4c22577ee5f4 ==============================
+[0m14:41:14.747281 [info ] [MainThread]: Running with dbt=1.11.7
+[0m14:41:14.747697 [debug] [MainThread]: running dbt with arguments {'log_format': 'default', 'log_cache_events': 'False', 'printer_width': '80', 'introspect': 'True', 'warn_error_options': 'WarnErrorOptionsV2(error=[], warn=[], silence=[])', 'debug': 'False', 'cache_selected_only': 'False', 'send_anonymous_usage_stats': 'True', 'log_path': 'logs', 'indirect_selection': 'eager', 'partial_parse': 'True', 'profiles_dir': '/home/hyunji-cho/.dbt', 'invocation_command': 'dbt run', 'target_path': 'None', 'warn_error': 'None', 'use_colors': 'True', 'quiet': 'False', 'fail_fast': 'False', 'write_json': 'True', 'empty': 'False', 'version_check': 'True', 'static_parser': 'True', 'no_print': 'None', 'use_experimental_parser': 'False'}
+[0m14:41:14.748026 [error] [MainThread]: Encountered an error:
+Runtime Error
+  No dbt_project.yml found at expected path /home/hyunji-cho/Documents/foodsharingmap_dashboard/dbt_project.yml
+  Verify that each entry within packages.yml (and their transitive dependencies) contains a file named dbt_project.yml
+  
+[0m14:41:14.749304 [debug] [MainThread]: Resource report: {"command_name": "run", "command_success": false, "command_wall_clock_time": 0.058013193, "process_in_blocks": "360", "process_kernel_time": 0.12306, "process_mem_max_rss": "126820", "process_out_blocks": "28408", "process_user_time": 1.667814}
+[0m14:41:14.749617 [debug] [MainThread]: Command `dbt run` failed at 14:41:14.749561 after 0.06 seconds
+[0m14:41:14.749852 [debug] [MainThread]: Sending event: {'category': 'dbt', 'action': 'invocation', 'label': 'end', 'context': [<snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x71f63855ff20>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x71f633ed1f10>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x71f6350dd0a0>]}
+[0m14:41:14.750087 [debug] [MainThread]: Flushing usage events
+[0m14:41:15.431248 [debug] [MainThread]: An error was encountered while trying to flush usage events
+[0m14:41:23.242041 [debug] [MainThread]: Sending event: {'category': 'dbt', 'action': 'invocation', 'label': 'start', 'context': [<snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x7d16b772fbf0>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x7d16b7077bc0>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x7d16b9bc6840>]}
+
+
+============================== 14:41:23.243918 | 827ac54e-adab-44fd-a8a1-2b30d7004a9b ==============================
+[0m14:41:23.243918 [info ] [MainThread]: Running with dbt=1.11.7
+[0m14:41:23.244276 [debug] [MainThread]: running dbt with arguments {'profiles_dir': '/home/hyunji-cho/.dbt', 'partial_parse': 'True', 'warn_error': 'None', 'send_anonymous_usage_stats': 'True', 'cache_selected_only': 'False', 'warn_error_options': 'WarnErrorOptionsV2(error=[], warn=[], silence=[])', 'use_colors': 'True', 'quiet': 'False', 'write_json': 'True', 'empty': 'False', 'log_path': 'logs', 'indirect_selection': 'eager', 'fail_fast': 'False', 'printer_width': '80', 'invocation_command': 'dbt run', 'introspect': 'True', 'no_print': 'None', 'log_format': 'default', 'static_parser': 'True', 'version_check': 'True', 'debug': 'False', 'use_experimental_parser': 'False', 'log_cache_events': 'False', 'target_path': 'None'}
+[0m14:41:23.244627 [error] [MainThread]: Encountered an error:
+Runtime Error
+  No dbt_project.yml found at expected path /home/hyunji-cho/Documents/foodsharingmap_dashboard/dbt_project.yml
+  Verify that each entry within packages.yml (and their transitive dependencies) contains a file named dbt_project.yml
+  
+[0m14:41:23.245144 [debug] [MainThread]: Resource report: {"command_name": "run", "command_success": false, "command_wall_clock_time": 0.037027273, "process_in_blocks": "0", "process_kernel_time": 0.064956, "process_mem_max_rss": "102908", "process_out_blocks": "8", "process_user_time": 0.81145}
+[0m14:41:23.245453 [debug] [MainThread]: Command `dbt run` failed at 14:41:23.245396 after 0.04 seconds
+[0m14:41:23.245699 [debug] [MainThread]: Sending event: {'category': 'dbt', 'action': 'invocation', 'label': 'end', 'context': [<snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x7d16b68dc170>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x7d16b68dd2b0>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x7d16b68dc2f0>]}
+[0m14:41:23.245937 [debug] [MainThread]: Flushing usage events
+[0m14:41:23.930370 [debug] [MainThread]: An error was encountered while trying to flush usage events

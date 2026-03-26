@@ -60,15 +60,17 @@ cd airflow && docker compose up -d
 
 | Category | 4 points (target) | Status |
 |---|---|---|
-| **Problem description** | Well described, clear what problem the project solves | Done |
-| **Cloud** | Developed in the cloud + IaC tools used | Terraform done, need Airflow on EC2 |
-| **Data ingestion** | End-to-end pipeline: multiple DAG steps, upload to data lake | DAG written, not yet deployed |
-| **Data warehouse** | Tables partitioned/clustered with explanation | Snowflake clustering keys defined |
-| **Transformations** | dbt, Spark, or similar | dbt models ready, not yet run |
-| **Dashboard** | 2+ tiles | Streamlit app with multiple tiles |
-| **Reproducibility** | Clear instructions, easy to run, code works | README exists |
+| **Problem description** | Well described, clear what problem the project solves | Done (README) |
+| **Cloud** | Developed in the cloud + IaC tools used | Done (Terraform + AWS + Snowflake). Need: EC2 Airflow deploy + Lambda test |
+| **Data ingestion** | End-to-end pipeline: multiple DAG steps, upload to data lake | Done (Airflow DAG: API → S3 → Snowflake, tested locally) |
+| **Data warehouse** | Tables partitioned/clustered with explanation | Done (Snowflake clustering keys + explanation in README) |
+| **Transformations** | dbt, Spark, or similar | Done (dbt staging/intermediate/marts, run + test passed) |
+| **Dashboard** | 2+ tiles | Done (5+ tiles: activities, geo by country/city, sharing methods, city drill-down, data quality) |
+| **Reproducibility** | Clear instructions, easy to run, code works | Done (README + sub-READMEs + secrets.toml example) |
 
-**Extra credit (optional)**: tests, Makefile, CI/CD pipeline (GitHub Actions done)
+**Extra credit (optional)**: tests (Airflow + dbt), CI/CD (GitHub Actions), data quality dashboard
+
+**Remaining for full 4 points on Cloud**: Deploy Airflow on EC2, test Lambda → EC2 trigger, deploy dashboard to Streamlit Cloud
 
 ## Working Rules
 

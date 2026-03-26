@@ -583,51 +583,45 @@ def render_data_quality(data: dict):
 
 
 def render_manual_trigger():
-    """Manual pipeline trigger button (calls Airflow REST API)."""
+    """Manual pipeline trigger — calls API Gateway to start EC2 + Airflow."""
     st.subheader("⚙️ Pipeline Control")
     st.markdown(
-        "Trigger a manual data refresh by calling the Airflow REST API."
+        "Start the pipeline by calling the API Gateway endpoint. "
+        "This invokes Lambda → starts EC2 → boots Airflow → "
+        "runs the DAG automatically."
     )
 
-    col1, col2 = st.columns([1, 3])
+    trigger_url = st.secrets.get("aws", {}).get("trigger_api_url", "")
 
-    with col1:
-        airflow_url = st.text_input(
-            "Airflow API URL",
-            value=AIRFLOW_API_BASE,
+    if not trigger_url:
+        st.warning(
+            "Trigger API URL not configured. "
+            "Add `[aws]` section with `trigger_api_url` to "
+            "`dashboard/.streamlit/secrets.toml`."
         )
+        return
 
-    with col2:
-        st.markdown("")  # spacing
-        st.markdown("")
+    if st.button("🔄 Start Pipeline", type="primary"):
+        with st.spinner("Starting EC2 instance..."):
+            try:
+                response = requests.post(trigger_url, json={}, timeout=15)
 
-    if st.button("🔄 Trigger Pipeline Run", type="primary"):
-        try:
-            dag_id = "food_sharing_map_pipeline"
-            url = f"{airflow_url}/dags/{dag_id}/dagRuns"
-            response = requests.post(
-                url,
-                json={"conf": {}},
-                auth=("airflow", "airflow"),  # default dev credentials
-                timeout=10,
-            )
-            if response.status_code in (200, 201):
-                st.success(
-                    f"Pipeline triggered successfully! "
-                    f"Run ID: {response.json().get('dag_run_id', 'N/A')}"
-                )
-            else:
-                st.error(
-                    f"Failed to trigger pipeline: {response.status_code} — "
-                    f"{response.text}"
-                )
-        except requests.exceptions.ConnectionError:
-            st.warning(
-                "Could not connect to Airflow API. "
-                "Ensure Airflow is running and the URL is correct."
-            )
-        except Exception as e:
-            st.error(f"Error triggering pipeline: {e}")
+                if response.status_code == 200:
+                    body = response.json()
+                    st.success(
+                        f"EC2 instance starting! "
+                        f"Airflow DAG will run automatically in ~2 minutes. "
+                        f"{body.get('body', '')}"
+                    )
+                else:
+                    st.error(
+                        f"Trigger failed: {response.status_code} — "
+                        f"{response.text}"
+                    )
+            except requests.exceptions.ConnectionError:
+                st.warning("Could not connect to the trigger API.")
+            except Exception as e:
+                st.error(f"Failed to trigger pipeline: {e}")
 
 
 # ---------------------------------------------------------------------------

@@ -37,3 +37,8 @@ output "lambda_start_airflow_arn" {
   description = "Lambda function ARN for starting Airflow"
   value       = aws_lambda_function.start_airflow.arn
 }
+
+output "trigger_api_url" {
+  description = "API Gateway URL for triggering the pipeline"
+  value       = "${aws_apigatewayv2_stage.default.invoke_url}/trigger"
+}
