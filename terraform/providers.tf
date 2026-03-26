@@ -1,6 +1,12 @@
 terraform {
   required_version = ">= 1.5.0"
 
+  backend "s3" {
+    bucket = "food-sharing-map-data-lake-prod"
+    key    = "terraform/terraform.tfstate"
+    region = "eu-central-1"
+  }
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
