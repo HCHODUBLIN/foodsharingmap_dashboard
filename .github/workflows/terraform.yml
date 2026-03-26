@@ -34,10 +34,10 @@ jobs:
 
       - name: Create tfvars
         run: |
-          cat <<'TFVARS' > terraform.tfvars
-          aws_region              = "eu-central-1"
-          project_name            = "food-sharing-map"
-          environment             = "prod"
+          cat <<TFVARS > terraform.tfvars
+          aws_region                 = "eu-central-1"
+          project_name               = "food-sharing-map"
+          environment                = "prod"
           snowflake_organization_name = "${{ secrets.SNOWFLAKE_ORG_NAME }}"
           snowflake_account_name      = "${{ secrets.SNOWFLAKE_ACCOUNT_NAME }}"
           snowflake_username          = "${{ secrets.SNOWFLAKE_USERNAME }}"
@@ -52,7 +52,7 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
       - name: Terraform Format Check
-        run: terraform fmt -check
+        run: terraform fmt -check -diff $(find . -name '*.tf' -not -name '*.tfvars')
 
       - name: Terraform Plan
         run: terraform plan -no-color
