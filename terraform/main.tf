@@ -121,6 +121,7 @@ resource "aws_security_group" "airflow_sg" {
 resource "aws_instance" "airflow" {
   ami                    = "ami-0a628e1e89aaedf80" # Amazon Linux 2023, eu-central-1
   instance_type          = "t2.medium"
+  key_name               = "food-sharing-map-key"
   iam_instance_profile   = aws_iam_instance_profile.airflow_profile.name
   vpc_security_group_ids = [aws_security_group.airflow_sg.id]
 

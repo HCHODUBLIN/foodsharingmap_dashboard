@@ -156,7 +156,11 @@ with DAG(
 
         # dbt run
         result = subprocess.run(
-            ["dbt", "run", "--project-dir", dbt_dir],
+            [
+                "dbt", "run",
+                "--project-dir", dbt_dir,
+                "--profiles-dir", dbt_dir,
+            ],
             capture_output=True,
             text=True,
             check=True,
@@ -165,7 +169,11 @@ with DAG(
 
         # dbt test
         result = subprocess.run(
-            ["dbt", "test", "--project-dir", dbt_dir],
+            [
+                "dbt", "test",
+                "--project-dir", dbt_dir,
+                "--profiles-dir", dbt_dir,
+            ],
             capture_output=True,
             text=True,
             check=True,
