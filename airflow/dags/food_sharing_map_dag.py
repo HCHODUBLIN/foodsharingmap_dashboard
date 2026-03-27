@@ -131,15 +131,28 @@ with DAG(
                     )
                 """)
 
-                # Append records (preserves history)
-                for r in data:
+                # Batch insert using SELECT ... UNION ALL (100 rows per batch)
+                batch_size = 100
+                for i in range(0, len(data), batch_size):
+                    batch = data[i:i + batch_size]
+                    selects = " UNION ALL ".join(
+                        "SELECT %s, PARSE_JSON(%s), %s"
+                        for _ in batch
+                    )
+                    params = []
+                    for r in batch:
+                        params.extend([
+                            r.get("id"),
+                            json.dumps(r),
+                            ingestion_ts,
+                        ])
                     cursor.execute(
-                        """
+                        f"""
                         INSERT INTO FOOD_SHARING_MAP.BRONZE.RAW_INITIATIVES
                             (id, raw_json, ingested_at)
-                        SELECT %s, PARSE_JSON(%s), %s
+                        {selects}
                         """,
-                        (r.get("id"), json.dumps(r), ingestion_ts),
+                        params,
                     )
 
             conn.commit()
@@ -154,43 +167,38 @@ with DAG(
         """Run dbt transformations (bronze -> silver -> gold) and tests."""
         dbt_dir = "/opt/dbt/food_sharing_map"
 
-        # dbt run
-        result = subprocess.run(
-            [
-                "dbt", "run",
-                "--project-dir", dbt_dir,
-                "--profiles-dir", dbt_dir,
-            ],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        logger.info("dbt run stdout:\n%s", result.stdout)
-        logger.info("dbt run stderr:\n%s", result.stderr)
-        if result.returncode != 0:
-            raise RuntimeError(
-                f"dbt run failed (exit {result.returncode}):\n"
-                f"{result.stdout}\n{result.stderr}"
+        def run_dbt_cmd(cmd, step_name, timeout=900):
+            logger.info("Starting %s: %s", step_name, " ".join(cmd))
+            process = subprocess.Popen(
+                cmd,
+                cwd=dbt_dir,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
             )
+            output_lines = []
+            for line in process.stdout:
+                line = line.rstrip()
+                output_lines.append(line)
+                logger.info("[%s] %s", step_name, line)
+            return_code = process.wait(timeout=timeout)
+            if return_code != 0:
+                raise RuntimeError(
+                    f"{step_name} failed (exit {return_code}):\n"
+                    + "\n".join(output_lines)
+                )
 
-        # dbt test
-        result = subprocess.run(
-            [
-                "dbt", "test",
-                "--project-dir", dbt_dir,
-                "--profiles-dir", dbt_dir,
-            ],
-            capture_output=True,
-            text=True,
-            check=False,
+        run_dbt_cmd(
+            ["dbt", "run", "--profiles-dir", "."],
+            "dbt_run",
+            timeout=1800,
         )
-        logger.info("dbt test stdout:\n%s", result.stdout)
-        logger.info("dbt test stderr:\n%s", result.stderr)
-        if result.returncode != 0:
-            raise RuntimeError(
-                f"dbt test failed (exit {result.returncode}):\n"
-                f"{result.stdout}\n{result.stderr}"
-            )
+        run_dbt_cmd(
+            ["dbt", "test", "--profiles-dir", "."],
+            "dbt_test",
+            timeout=900,
+        )
 
     @task()
     def stop_ec2_instance() -> None:
