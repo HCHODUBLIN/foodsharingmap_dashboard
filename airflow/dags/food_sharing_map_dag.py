@@ -163,9 +163,15 @@ with DAG(
             ],
             capture_output=True,
             text=True,
-            check=True,
+            check=False,
         )
-        logger.info("dbt run output:\n%s", result.stdout)
+        logger.info("dbt run stdout:\n%s", result.stdout)
+        logger.info("dbt run stderr:\n%s", result.stderr)
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"dbt run failed (exit {result.returncode}):\n"
+                f"{result.stdout}\n{result.stderr}"
+            )
 
         # dbt test
         result = subprocess.run(
@@ -176,9 +182,15 @@ with DAG(
             ],
             capture_output=True,
             text=True,
-            check=True,
+            check=False,
         )
-        logger.info("dbt test output:\n%s", result.stdout)
+        logger.info("dbt test stdout:\n%s", result.stdout)
+        logger.info("dbt test stderr:\n%s", result.stderr)
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"dbt test failed (exit {result.returncode}):\n"
+                f"{result.stdout}\n{result.stderr}"
+            )
 
     @task()
     def stop_ec2_instance() -> None:
