@@ -253,7 +253,7 @@ The dashboard works in **two modes**:
 
 ## Dashboard Access
 
-> **Live dashboard**: *[Deploy URL will be added after deployment]*
+> **Live dashboard**: https://foodsharingmapdashboard.streamlit.app/
 >
 > To run locally: `cd dashboard && streamlit run app.py`
 
