@@ -104,7 +104,12 @@ with DAG(
                 f"Expected list from S3 payload, got {type(data).__name__}"
             )
 
+        import uuid
+
         ingestion_ts = datetime.now(timezone.utc).isoformat()
+        run_id = str(uuid.uuid4())
+        logger.info("Pipeline run_id: %s", run_id)
+
         conn_params = BaseHook.get_connection("snowflake_default")
         extra = json.loads(conn_params.extra) if conn_params.extra else {}
 
@@ -126,6 +131,7 @@ with DAG(
                         id VARCHAR,
                         raw_json VARIANT,
                         ingested_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
+                        run_id VARCHAR,
                         source_api VARCHAR
                             DEFAULT 'sharingsolutions_cultivate_v1'
                     )
@@ -136,7 +142,7 @@ with DAG(
                 for i in range(0, len(data), batch_size):
                     batch = data[i:i + batch_size]
                     selects = " UNION ALL ".join(
-                        "SELECT %s, PARSE_JSON(%s), %s"
+                        "SELECT %s, PARSE_JSON(%s), %s, %s"
                         for _ in batch
                     )
                     params = []
@@ -145,11 +151,12 @@ with DAG(
                             r.get("id"),
                             json.dumps(r),
                             ingestion_ts,
+                            run_id,
                         ])
                     cursor.execute(
                         f"""
                         INSERT INTO FOOD_SHARING_MAP.BRONZE.RAW_INITIATIVES
-                            (id, raw_json, ingested_at)
+                            (id, raw_json, ingested_at, run_id)
                         {selects}
                         """,
                         params,

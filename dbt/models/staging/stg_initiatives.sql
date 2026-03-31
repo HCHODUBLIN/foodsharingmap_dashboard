@@ -1,6 +1,6 @@
 -- Staging: cleaned and typed initiative data
 -- Extracts fields from raw JSON and casts to appropriate types
--- Filters to latest ingestion snapshot only
+-- Filters to latest successful run (idempotent: re-runs replace previous)
 
 {{ config(materialized='view') }}
 
@@ -18,9 +18,21 @@ SELECT
     raw_json:foodSharingActivities          AS food_sharing_activities_raw,
     raw_json:howItIsShared                  AS how_it_is_shared_raw,
     ingested_at,
+    run_id,
     source_api
 FROM {{ source('bronze', 'raw_initiatives') }}
 WHERE raw_json:id IS NOT NULL
-  AND ingested_at = (
-      SELECT MAX(ingested_at) FROM {{ source('bronze', 'raw_initiatives') }}
+  AND run_id = (
+      SELECT run_id
+      FROM {{ source('bronze', 'raw_initiatives') }}
+      GROUP BY run_id
+      HAVING COUNT(*) = (
+          SELECT MAX(cnt) FROM (
+              SELECT COUNT(*) as cnt
+              FROM {{ source('bronze', 'raw_initiatives') }}
+              GROUP BY run_id
+          )
+      )
+      ORDER BY MAX(ingested_at) DESC
+      LIMIT 1
   )

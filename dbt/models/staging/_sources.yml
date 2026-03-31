@@ -14,5 +14,7 @@ sources:
             description: "Full JSON record as VARIANT"
           - name: ingested_at
             description: "Timestamp of data ingestion"
+          - name: run_id
+            description: "Unique pipeline run identifier (UUID)"
           - name: source_api
             description: "Source API identifier"
