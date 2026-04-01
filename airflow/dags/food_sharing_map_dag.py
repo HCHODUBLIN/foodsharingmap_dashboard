@@ -17,6 +17,7 @@ Flow:
 import json
 import logging
 import subprocess
+import uuid
 from datetime import datetime, timedelta, timezone
 
 import requests
@@ -103,8 +104,6 @@ with DAG(
             raise ValueError(
                 f"Expected list from S3 payload, got {type(data).__name__}"
             )
-
-        import uuid
 
         ingestion_ts = datetime.now(timezone.utc).isoformat()
         run_id = str(uuid.uuid4())
