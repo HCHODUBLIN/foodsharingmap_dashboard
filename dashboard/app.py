@@ -581,6 +581,105 @@ def render_data_quality(data: dict):
     else:
         st.success("No geographic outliers found")
 
+    # Potential duplicates check
+    st.markdown("### Potential Duplicates")
+    st.markdown(
+        "Initiatives within the same city with similar names or URLs. "
+        "These may be duplicate entries."
+    )
+
+    from difflib import SequenceMatcher
+
+    dup_df = raw.dropna(subset=["city"]).copy()
+    duplicates = []
+
+    for city, group in dup_df.groupby("city"):
+        if len(group) < 2:
+            continue
+        rows = group.to_dict("records")
+        for i in range(len(rows)):
+            for j in range(i + 1, len(rows)):
+                STOP_WORDS = {
+                    "community", "gardens", "garden",
+                    "cooperativa", "sostenible",
+                    "fundación", "fundació", "hort",
+                    "jardins", "la", "le", "les",
+                    "marseille", "milano", "caritas",
+                    "food", "association", "charita",
+                    "banco", "asociación", "associaci",
+                }
+
+                def clean_name(name):
+                    words = name.lower().split()
+                    return " ".join(
+                        w for w in words if w not in STOP_WORDS
+                    )
+
+                name_a = clean_name(str(rows[i].get("name", "")))
+                name_b = clean_name(str(rows[j].get("name", "")))
+                import re
+
+                def clean_url(url):
+                    """Remove protocol, www, and TLD for comparison."""
+                    url = re.sub(r"https?://", "", url)
+                    url = re.sub(r"^www\.", "", url)
+                    url = re.sub(r"\.[a-z]{2,3}/?$", "", url)
+                    return url.strip("/").lower()
+
+                url_a = clean_url(str(rows[i].get("url", "")))
+                url_b = clean_url(str(rows[j].get("url", "")))
+
+                name_sim = SequenceMatcher(None, name_a, name_b).ratio()
+                url_sim = SequenceMatcher(
+                    None, url_a, url_b,
+                ).ratio() if url_a and url_b else 0
+
+                if name_sim > 0.7 or (url_sim > 0.8 and url_a != ""):
+                    reason = []
+                    if name_sim > 0.7:
+                        reason.append(f"name {name_sim:.0%} similar")
+                    if url_sim > 0.8:
+                        reason.append(f"URL {url_sim:.0%} similar")
+                    reason_str = ", ".join(reason)
+                    duplicates.append({
+                        "City": city,
+                        "ID": rows[i].get("id", "N/A"),
+                        "Name": rows[i].get("name", "N/A"),
+                        "URL": rows[i].get("url", ""),
+                        "Reason": reason_str,
+                    })
+                    duplicates.append({
+                        "City": city,
+                        "ID": rows[j].get("id", "N/A"),
+                        "Name": rows[j].get("name", "N/A"),
+                        "URL": rows[j].get("url", ""),
+                        "Reason": reason_str,
+                    })
+
+    if duplicates:
+        pairs = len(duplicates) // 2
+        st.warning(f"Found {pairs} potential duplicate pairs")
+        dup_frame = pd.DataFrame(duplicates)
+        # Assign pair number (every 2 rows = 1 pair)
+        dup_frame["_pair"] = [i // 2 for i in range(len(dup_frame))]
+        # Get max percentage per pair for sorting
+        dup_frame["_sort"] = dup_frame["Reason"].str.extractall(
+            r"(\d+)%"
+        ).astype(int).groupby(level=0).max()[0]
+        dup_frame["_sort"] = dup_frame["_sort"].fillna(0)
+        pair_sort = dup_frame.groupby("_pair")["_sort"].max()
+        dup_frame["_pair_sort"] = dup_frame["_pair"].map(pair_sort)
+        dup_frame = dup_frame.sort_values(
+            ["_pair_sort", "_pair"], ascending=[False, True],
+        ).drop(columns=["_pair", "_sort", "_pair_sort"])
+        st.dataframe(
+            dup_frame,
+            use_container_width=True,
+            hide_index=True,
+        )
+    else:
+        st.success("No potential duplicates found")
+
 
 def render_manual_trigger():
     """Manual pipeline trigger — calls API Gateway to start EC2 + Airflow."""
