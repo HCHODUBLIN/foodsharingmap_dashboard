@@ -680,6 +680,72 @@ def render_data_quality(data: dict):
     else:
         st.success("No potential duplicates found")
 
+    # Dead link checker
+    st.markdown("### Dead Links")
+    st.markdown(
+        "Initiatives with URLs that return errors or time out."
+    )
+
+    if st.button("Check URLs (may take a minute)", key="check_urls"):
+        url_fields = ["url", "facebookUrl", "xUrl", "instagramUrl"]
+        dead_links = []
+        progress = st.progress(0)
+        urls_to_check = []
+
+        for _, row in raw.iterrows():
+            for field in url_fields:
+                url = str(row.get(field, "")).strip()
+                if url and url != "nan":
+                    urls_to_check.append((row, field, url))
+
+        for idx, (row, field, url) in enumerate(urls_to_check):
+            progress.progress((idx + 1) / len(urls_to_check))
+            try:
+                resp = requests.head(
+                    url, timeout=5, allow_redirects=True,
+                )
+                if resp.status_code >= 400:
+                    dead_links.append({
+                        "ID": row.get("id", "N/A"),
+                        "Name": row.get("name", "N/A"),
+                        "City": row.get("city", "N/A"),
+                        "Field": field,
+                        "URL": url,
+                        "Issue": f"HTTP {resp.status_code}",
+                    })
+            except requests.exceptions.Timeout:
+                dead_links.append({
+                    "ID": row.get("id", "N/A"),
+                    "Name": row.get("name", "N/A"),
+                    "City": row.get("city", "N/A"),
+                    "Field": field,
+                    "URL": url,
+                    "Issue": "Timeout",
+                })
+            except requests.exceptions.ConnectionError:
+                dead_links.append({
+                    "ID": row.get("id", "N/A"),
+                    "Name": row.get("name", "N/A"),
+                    "City": row.get("city", "N/A"),
+                    "Field": field,
+                    "URL": url,
+                    "Issue": "Connection error",
+                })
+            except Exception:
+                pass
+
+        progress.empty()
+
+        if dead_links:
+            st.warning(f"Found {len(dead_links)} dead links")
+            st.dataframe(
+                pd.DataFrame(dead_links),
+                use_container_width=True,
+                hide_index=True,
+            )
+        else:
+            st.success("All URLs are reachable")
+
 
 def render_manual_trigger():
     """Manual pipeline trigger — calls API Gateway to start EC2 + Airflow."""
@@ -764,12 +830,33 @@ def main():
     tab_dashboard, tab_quality = st.tabs(["Dashboard", "Data Quality"])
 
     with tab_dashboard:
+        # City filter
+        all_cities = sorted(data["raw"]["city"].dropna().unique())
+        selected_city = st.selectbox(
+            "Filter by city (optional)",
+            ["All"] + all_cities,
+            key="city_filter",
+        )
+
+        if selected_city != "All":
+            filtered_raw = data["raw"][
+                data["raw"]["city"] == selected_city
+            ]
+            filtered_data = prepare_api_data(filtered_raw)
+            # Keep snowflake data for unfiltered charts
+            filtered_data.update({
+                k: v for k, v in data.items()
+                if k in ("geo_dist", "country_summary")
+            })
+        else:
+            filtered_data = data
+
         st.divider()
-        render_activity_tile(data)
+        render_activity_tile(filtered_data)
         st.divider()
         render_geo_tile(data)
         st.divider()
-        render_sharing_methods(data)
+        render_sharing_methods(filtered_data)
         st.divider()
         render_city_drilldown(data)
         st.divider()
