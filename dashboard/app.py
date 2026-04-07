@@ -863,7 +863,21 @@ def main():
         render_manual_trigger()
 
     with tab_quality:
-        render_data_quality(api_data)
+        all_cities_q = sorted(api_data["raw"]["city"].dropna().unique())
+        selected_city_q = st.selectbox(
+            "Filter by city (optional)",
+            ["All"] + all_cities_q,
+            key="city_filter_quality",
+        )
+
+        if selected_city_q != "All":
+            filtered_api = api_data.copy()
+            filtered_api["raw"] = api_data["raw"][
+                api_data["raw"]["city"] == selected_city_q
+            ]
+            render_data_quality(filtered_api)
+        else:
+            render_data_quality(api_data)
 
     # Footer
     st.divider()
