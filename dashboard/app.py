@@ -683,11 +683,12 @@ def render_data_quality(data: dict):
     # Dead link checker
     st.markdown("### Dead Links")
     st.markdown(
-        "Initiatives with URLs that return errors or time out."
+        "Initiatives with URLs that return errors or time out. "
+        "Select a city above to check a smaller set."
     )
 
-    if st.button("Check URLs (may take a minute)", key="check_urls"):
-        url_fields = ["url", "facebookUrl", "xUrl", "instagramUrl"]
+    if st.button("Check URLs", key="check_urls"):
+        url_fields = ["url"]
         dead_links = []
         progress = st.progress(0)
         urls_to_check = []
