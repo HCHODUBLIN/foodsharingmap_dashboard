@@ -3,20 +3,13 @@ Food Sharing Map Dashboard
 
 Interactive dashboard displaying food sharing initiatives worldwide.
 Data sourced from ShareCity200 CULTIVATE REST API.
-
-Supports two modes:
-  1. Snowflake mode: reads from gold layer tables (production)
-  2. API mode: fetches directly from REST API (demo / no Snowflake)
 """
-
-import json
 
 from datetime import datetime
 
 import numpy as np
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
 import requests
 import streamlit as st
 
@@ -31,7 +24,6 @@ st.set_page_config(
 )
 
 API_URL = "https://www.sharingsolutions.eu/wp-json/cultivate/v1/data"
-AIRFLOW_API_BASE = "http://localhost:8080/api/v1"  # Configurable
 
 # CULTIVATE brand palette (from brandbook v1.1)
 BROCCOGREEN = "#05A54B"
@@ -64,55 +56,6 @@ def load_data_from_api() -> pd.DataFrame:
         data = payload
 
     return pd.DataFrame(data)
-
-
-def load_data_from_snowflake(query: str) -> pd.DataFrame:
-    """Load data from Snowflake gold layer."""
-    import snowflake.connector
-
-    conn = snowflake.connector.connect(
-        user=st.secrets["snowflake"]["user"],
-        password=st.secrets["snowflake"]["password"],
-        account=st.secrets["snowflake"]["account"],
-        warehouse=st.secrets["snowflake"]["warehouse"],
-        database=st.secrets["snowflake"]["database"],
-        schema="GOLD",
-    )
-    try:
-        df = pd.read_sql(query, conn)
-        df.columns = [c.lower() for c in df.columns]
-        return df
-    finally:
-        conn.close()
-
-
-@st.cache_data(ttl=3600)
-def load_snowflake_data() -> dict:
-    """Load all gold tables from Snowflake."""
-    activity_dist = load_data_from_snowflake(
-        "SELECT * FROM FOOD_SHARING_MAP.GOLD.FCT_ACTIVITY_DISTRIBUTION"
-    )
-    geo_dist = load_data_from_snowflake(
-        "SELECT * FROM FOOD_SHARING_MAP.GOLD.FCT_GEO_DISTRIBUTION"
-    )
-    country_summary = load_data_from_snowflake(
-        "SELECT * FROM FOOD_SHARING_MAP.GOLD.FCT_COUNTRY_SUMMARY"
-    )
-    sharing_methods = load_data_from_snowflake(
-        "SELECT * FROM FOOD_SHARING_MAP.SILVER.INT_INITIATIVES_SHARING_METHODS"
-    )
-    sharing_dist = (
-        sharing_methods.groupby("sharing_method")
-        .agg(initiative_count=("initiative_id", "nunique"))
-        .reset_index()
-        .sort_values("initiative_count", ascending=False)
-    )
-    return {
-        "activity_dist": activity_dist,
-        "geo_dist": geo_dist,
-        "country_summary": country_summary,
-        "sharing_dist": sharing_dist,
-    }
 
 
 def prepare_api_data(df: pd.DataFrame) -> dict:
@@ -748,48 +691,6 @@ def render_data_quality(data: dict):
             st.success("All URLs are reachable")
 
 
-def render_manual_trigger():
-    """Manual pipeline trigger — calls API Gateway to start EC2 + Airflow."""
-    st.subheader("⚙️ Pipeline Control")
-    st.markdown(
-        "Start the pipeline by calling the API Gateway endpoint. "
-        "This invokes Lambda → starts EC2 → boots Airflow → "
-        "runs the DAG automatically."
-    )
-
-    trigger_url = st.secrets.get("aws", {}).get("trigger_api_url", "")
-
-    if not trigger_url:
-        st.warning(
-            "Trigger API URL not configured. "
-            "Add `[aws]` section with `trigger_api_url` to "
-            "`dashboard/.streamlit/secrets.toml`."
-        )
-        return
-
-    if st.button("🔄 Start Pipeline", type="primary"):
-        with st.spinner("Starting EC2 instance..."):
-            try:
-                response = requests.post(trigger_url, json={}, timeout=15)
-
-                if response.status_code == 200:
-                    body = response.json()
-                    st.success(
-                        f"EC2 instance starting! "
-                        f"Airflow DAG will run automatically in ~2 minutes. "
-                        f"{body.get('body', '')}"
-                    )
-                else:
-                    st.error(
-                        f"Trigger failed: {response.status_code} — "
-                        f"{response.text}"
-                    )
-            except requests.exceptions.ConnectionError:
-                st.warning("Could not connect to the trigger API.")
-            except Exception as e:
-                st.error(f"Failed to trigger pipeline: {e}")
-
-
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -798,33 +699,9 @@ def render_manual_trigger():
 def main():
     render_header()
 
-    # Try Snowflake first, fallback to API
-    use_snowflake = False
-    try:
-        if "snowflake" in st.secrets:
-            with st.spinner("Loading data from Snowflake..."):
-                snowflake_data = load_snowflake_data()
-            use_snowflake = True
-    except Exception:
-        pass
-
-    # Always load API data for data quality + fallback
     with st.spinner("Loading data from API..."):
         raw_df = load_data_from_api()
-        api_data = prepare_api_data(raw_df)
-
-    if use_snowflake:
-        # Use Snowflake GOLD data for dashboard charts
-        data = {
-            "activity_dist": snowflake_data["activity_dist"],
-            "geo_dist": snowflake_data["geo_dist"],
-            "country_summary": snowflake_data["country_summary"],
-            "sharing_dist": snowflake_data["sharing_dist"],
-            "raw": api_data["raw"],
-            "activities": api_data["activities"],
-        }
-    else:
-        data = api_data
+        data = prepare_api_data(raw_df)
 
     render_kpis(data)
 
@@ -844,11 +721,6 @@ def main():
                 data["raw"]["city"] == selected_city
             ]
             filtered_data = prepare_api_data(filtered_raw)
-            # Keep snowflake data for unfiltered charts
-            filtered_data.update({
-                k: v for k, v in data.items()
-                if k in ("geo_dist", "country_summary")
-            })
         else:
             filtered_data = data
 
@@ -860,11 +732,9 @@ def main():
         render_sharing_methods(filtered_data)
         st.divider()
         render_city_drilldown(data)
-        st.divider()
-        render_manual_trigger()
 
     with tab_quality:
-        all_cities_q = sorted(api_data["raw"]["city"].dropna().unique())
+        all_cities_q = sorted(data["raw"]["city"].dropna().unique())
         selected_city_q = st.selectbox(
             "Filter by city (optional)",
             ["All"] + all_cities_q,
@@ -872,13 +742,13 @@ def main():
         )
 
         if selected_city_q != "All":
-            filtered_api = api_data.copy()
-            filtered_api["raw"] = api_data["raw"][
-                api_data["raw"]["city"] == selected_city_q
+            filtered_quality = data.copy()
+            filtered_quality["raw"] = data["raw"][
+                data["raw"]["city"] == selected_city_q
             ]
-            render_data_quality(filtered_api)
+            render_data_quality(filtered_quality)
         else:
-            render_data_quality(api_data)
+            render_data_quality(data)
 
     # Footer
     st.divider()
