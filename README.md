@@ -259,6 +259,15 @@ The dashboard works in **two modes**:
 
 ---
 
+## Documentation
+
+Each subdirectory has its own README with component-specific details:
+
+- [airflow/README.md](airflow/README.md) — DAG flow, local setup, Snowflake connection config
+- [terraform/README.md](terraform/README.md) — AWS + Snowflake resources, role hierarchy, file structure
+
+---
+
 ## Project Structure
 
 ```
